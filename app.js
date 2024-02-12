@@ -1,16 +1,16 @@
 // Import necessary modules and configure environment variables
-require("dotenv").config();
-const bodyParser = require("body-parser");
-const express = require("express");
-const ejs = require("ejs");
-const mongoose = require("mongoose");
-const session = require("express-session");
-const LocalStrategy = require("passport-local").Strategy;
-const passport = require("passport");
-const passportLocalMongoose = require("passport-local-mongoose");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const findOrCreate = require("mongoose-findorcreate");
-const FacebookStrategy = require("passport-facebook").Strategy;
+require("dotenv").config(); // Load environment variables from .env file
+const bodyParser = require("body-parser"); // Middleware to parse request bodies
+const express = require("express"); // Express web application framework
+const ejs = require("ejs"); // Templating engine for rendering views
+const mongoose = require("mongoose"); // MongoDB object modeling tool
+const session = require("express-session"); // Middleware for session management
+const LocalStrategy = require("passport-local").Strategy; // Strategy for authenticating with a username and password
+const passport = require("passport"); // Passport authentication middleware
+const passportLocalMongoose = require("passport-local-mongoose"); // Mongoose plugin for Passport
+const GoogleStrategy = require("passport-google-oauth20").Strategy; // Strategy for authenticating with Google OAuth
+const findOrCreate = require("mongoose-findorcreate"); // Mongoose plugin to find or create documents
+const FacebookStrategy = require("passport-facebook").Strategy; // Strategy for authenticating with Facebook
 
 // Initialize Express application
 const app = express();
@@ -30,99 +30,64 @@ const userSchema = new mongoose.Schema({
   secret: String,
 });
 
-userSchema.plugin(passportLocalMongoose);
-userSchema.plugin(findOrCreate);
+userSchema.plugin(passportLocalMongoose); // Adds methods for registering and authenticating users
+userSchema.plugin(findOrCreate); // Adds method to find or create documents
 
 // Configure middleware for serving static files and setting view engine
-app.use(express.static("public"));
-app.set("view engine", "ejs");
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static("public")); // Serve static files from the public directory
+app.set("view engine", "ejs"); // Set EJS as the template engine
+app.use(bodyParser.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 // Set up session management for Passport
 app.use(
   session({
-    secret: "Our little Secret.",
+    secret: "Our little Secret.", // Secret key for session encryption
     resave: false,
     saveUninitialized: false,
   })
 );
 
 // Initialize Passport and its session handling
-app.use(passport.initialize());
-app.use(passport.session());
+app.use(passport.initialize()); // Initialize Passport
+app.use(passport.session()); // Persist login sessions
 
 // Create User model based on the defined schema
 const User = new mongoose.model("User", userSchema);
 
 // Configures Passport to use a local strategy for authentication
-passport.use(new LocalStrategy(User.authenticate()));
+passport.use(new LocalStrategy(User.authenticate())); // Use local strategy for authentication
 
 // Serialize and deserialize user instances to and from the session
 passport.serializeUser(function (user, done) {
-  done(null, user._id);
-  // if you use Model.id as your idAttribute maybe you'd want
-  // done(null, user.id);
+  done(null, user._id); // Store user ID in session
 });
 
 passport.deserializeUser(function (id, done) {
-  User.findById(id)
+  User.findById(id) // Find user by ID
     .then((user) => {
-      done(null, user);
+      done(null, user); // Callback with user object
     })
-    .catch(done);
+    .catch(done); // Handle errors
 });
-
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: process.env.FACEBOOK_APP_ID,
-      clientSecret: process.env.FACEBOOK_APP_SECRET,
-      callbackURL: "http://localhost:3000/auth/facebook/callback",
-    },
-    function (accessToken, refreshToken, profile, cb) {
-      User.findOrCreate({ facebookId: profile.id }, function (err, user) {
-        return cb(err, user);
-      });
-    }
-  )
-);
-
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.CLIENT_ID,
-      clientSecret: process.env.CLIENT_SECRET,
-      callbackURL: "http://localhost:3000/auth/google/secrets",
-      userProfile: "https://www.googleapis.com/oauth2/userinfo",
-    },
-    function (accessToken, refreshToken, profile, cb) {
-      console.log(profile);
-
-      User.findOrCreate({ googleId: profile.id }, function (err, user) {
-        return cb(err, user);
-      });
-    }
-  )
-);
 
 // Define routes for the application
 app.get("/", function (req, res) {
-  res.render("home");
+  res.render("home"); // Render home page
 });
 
 app.get("/login", function (req, res) {
-  res.render("login");
+  res.render("login"); // Render login page
 });
 
 app.get("/register", function (req, res) {
-  res.render("register");
+  res.render("register"); // Render registration page
 });
 
 app.get("/secrets", function (req, res) {
-  User.find({ secret: { $ne: null } })
+  User.find({ secret: { $ne: null } }) // Find users with secrets
     .then((foundUsers) => {
       if (foundUsers) {
-        res.render("secrets", { usersWithSecrets: foundUsers });
+        res.render("secrets", { usersWithSecrets: foundUsers }); // Render secrets page with users who have secrets
       }
     })
     .catch((err) => {
@@ -132,42 +97,46 @@ app.get("/secrets", function (req, res) {
 
 app.get("/submit", (req, res) => {
   if (req.isAuthenticated()) {
-    res.render("submit");
+    // Check if user is authenticated
+    res.render("submit"); // Render submit page
   } else {
-    res.redirect("login");
+    res.redirect("login"); // Redirect to login if not authenticated
   }
 });
 
 // Handle user logout
 app.get("/logout", function (req, res) {
   req.logout((err) => {
+    // Log out the user
     if (err) {
       console.log(err);
     }
   });
-  res.redirect("/");
+  res.redirect("/"); // Redirect to home page
 });
 
+// Passport Google OAuth routes
 app.get("/auth/google", function (req, res) {
-  passport.authenticate("google", { scope: ["profile"] })(req, res);
+  passport.authenticate("google", { scope: ["profile"] })(req, res); // Initiate Google OAuth authentication
 });
 
 app.get(
   "/auth/google/secrets",
   passport.authenticate("google", { failureRedirect: "/login" }),
   function (req, res) {
-    // Successful authentication, redirect home.
+    // Successful authentication, redirect to secrets page
     res.redirect("/secrets");
   }
 );
 
-app.get("/auth/facebook", passport.authenticate("facebook"));
+// Passport Facebook OAuth routes
+app.get("/auth/facebook", passport.authenticate("facebook")); // Initiate Facebook OAuth authentication
 
 app.get(
   "/auth/facebook/callback",
   passport.authenticate("facebook", { failureRedirect: "/login" }),
   function (req, res) {
-    // Successful authentication, redirect home.
+    // Successful authentication, redirect to secrets page
     res.redirect("/secrets");
   }
 );
@@ -180,11 +149,11 @@ app.post("/register", function (req, res) {
     function (err, user) {
       if (err) {
         console.log(err);
-        res.redirect("register");
+        res.redirect("register"); // Redirect back to registration page on error
       } else {
-        // Authenticates the newly registered user
+        // Authenticate the newly registered user
         passport.authenticate("local")(req, res, function () {
-          res.redirect("/secrets");
+          res.redirect("/secrets"); // Redirect to secrets page after successful registration
         });
       }
     }
@@ -211,6 +180,7 @@ app.post("/login", async function (req, res) {
   });
 });
 
+// Handle user submission of a secret
 app.post("/submit", (req, res) => {
   const submittedSecret = req.body.secret;
 
@@ -234,5 +204,5 @@ app.post("/submit", (req, res) => {
 
 // Start the server
 app.listen(3000, function () {
-  console.log("Server started on port  3000: http://localhost:3000/");
+  console.log("Server started on port 3000: http://localhost:3000/");
 });
